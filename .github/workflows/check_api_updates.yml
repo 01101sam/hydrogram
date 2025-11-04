@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -92,22 +94,20 @@ jobs:
           echo "" >> $NEWS_FILE
           echo "Updated MTProto API schema to Layer $LAYER_VERSION." >> $NEWS_FILE
 
+      - name: Install package dependencies
+        if: steps.check-updates.outputs.updates_detected == 'true'
+        run: |
+          pip install -e .
+
       - name: Compile API
         if: steps.check-updates.outputs.updates_detected == 'true'
         run: |
-          pip install .
-          python -m compiler.api.compiler || {
-            echo "API compilation failed"
-            exit 1
-          }
+          python -m compiler.api.compiler
 
       - name: Compile errors
         if: steps.check-updates.outputs.updates_detected == 'true'
         run: |
-          python -m compiler.errors.compiler || {
-            echo "Error compilation failed"
-            exit 1
-          }
+          python -m compiler.errors.compiler
 
       - name: Create branch and commit changes
         if: steps.check-updates.outputs.updates_detected == 'true' && steps.check-pr.outputs.existing_pr == 'false'
@@ -116,7 +116,12 @@ jobs:
           BRANCH_NAME="update/mtproto-api-updates"
 
           git checkout -b $BRANCH_NAME
-          git add compiler/api/source/main_api.tl hydrogram/raw/ hydrogram/errors/ news/
+          
+          # Add all changed and new files
+          git add -A compiler/api/source/main_api.tl
+          git add -A hydrogram/raw/
+          git add -A hydrogram/errors/
+          git add -A news/
           
           # Check if there are changes to commit
           if git diff --staged --quiet; then
@@ -132,15 +137,19 @@ jobs:
         run: |
           LAYER_VERSION="${{ steps.check-updates.outputs.layer_version }}"
           BRANCH_NAME="update/mtproto-api-updates"
+          BASE_BRANCH="${{ github.event.repository.default_branch }}"
 
           # Fetch the latest changes from remote
           git fetch origin
 
-          # Checkout the existing branch based on dev
-          git checkout -B $BRANCH_NAME origin/dev
+          # Checkout the existing branch based on default branch
+          git checkout -B $BRANCH_NAME origin/$BASE_BRANCH
 
-          # Add the changes and commit
-          git add compiler/api/source/main_api.tl hydrogram/raw/ hydrogram/errors/ news/
+          # Add all changed and new files
+          git add -A compiler/api/source/main_api.tl
+          git add -A hydrogram/raw/
+          git add -A hydrogram/errors/
+          git add -A news/
           
           # Check if there are changes to commit
           if git diff --staged --quiet; then
@@ -160,13 +169,14 @@ jobs:
         run: |
           LAYER_VERSION="${{ steps.check-updates.outputs.layer_version }}"
           BRANCH_NAME="update/mtproto-api-updates"
+          BASE_BRANCH="${{ github.event.repository.default_branch }}"
           PR_TITLE="Update MTProto API schema"
           PR_BODY="This PR automatically updates the MTProto API schema to Layer ${LAYER_VERSION}.\n\n- Updated main schema file\n- Recompiled raw and errors modules\n- Created news entry for changelog"
 
           gh pr create \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
-            --base dev \
+            --base "$BASE_BRANCH" \
             --head "$BRANCH_NAME" \
             --label "enhancement" \
             --label "automated"
