@@ -110,10 +110,9 @@ jobs:
           BRANCH_NAME="update/mtproto-api-updates"
 
           git checkout -b $BRANCH_NAME
-          git pull
           git add compiler/api/source/main_api.tl hydrogram/raw/ hydrogram/errors/ news/
           git commit -m "Update MTProto API schema to Layer ${LAYER_VERSION}"
-          git push origin $BRANCH_NAME
+          git push --set-upstream origin $BRANCH_NAME
 
       - name: Update existing branch
         if: steps.check-updates.outputs.updates_detected == 'true' && steps.check-pr.outputs.existing_pr == 'true'
@@ -129,7 +128,7 @@ jobs:
           git commit -m "Update MTProto API schema to Layer ${LAYER_VERSION}"
 
           # Force push to update the branch
-          git push --force origin $BRANCH_NAME-temp:$BRANCH_NAME
+          git push --set-upstream --force origin $BRANCH_NAME-temp:$BRANCH_NAME
 
       - name: Create Pull Request
         if: steps.check-updates.outputs.updates_detected == 'true' && steps.check-pr.outputs.existing_pr == 'false'
