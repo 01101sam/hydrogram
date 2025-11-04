@@ -62,13 +62,23 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Check existing PR
+      - name: Check existing PR and branch
         if: steps.check-updates.outputs.updates_detected == 'true'
         id: check-pr
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH_NAME="update/mtproto-api-updates"
+
+          # Fetch to check remote branches
+          git fetch origin
+
+          # Check if remote branch exists
+          if git ls-remote --heads origin $BRANCH_NAME | grep -q $BRANCH_NAME; then
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+          fi
 
           # Check if there's an open PR for this branch
           PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --state open --json number -q '.[0].number' || echo "")
@@ -109,40 +119,14 @@ jobs:
         run: |
           python -m compiler.errors.compiler
 
-      - name: Create branch and commit changes
-        if: steps.check-updates.outputs.updates_detected == 'true' && steps.check-pr.outputs.existing_pr == 'false'
-        run: |
-          LAYER_VERSION="${{ steps.check-updates.outputs.layer_version }}"
-          BRANCH_NAME="update/mtproto-api-updates"
-
-          git checkout -b $BRANCH_NAME
-          
-          # Add all changed and new files
-          git add -A compiler/api/source/main_api.tl
-          git add -A hydrogram/raw/
-          git add -A hydrogram/errors/
-          git add -A news/
-          
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-            exit 1
-          fi
-          
-          git commit -m "Update MTProto API schema to Layer ${LAYER_VERSION}"
-          git push --set-upstream origin $BRANCH_NAME
-
-      - name: Update existing branch
-        if: steps.check-updates.outputs.updates_detected == 'true' && steps.check-pr.outputs.existing_pr == 'true'
+      - name: Create or update branch and commit changes
+        if: steps.check-updates.outputs.updates_detected == 'true'
         run: |
           LAYER_VERSION="${{ steps.check-updates.outputs.layer_version }}"
           BRANCH_NAME="update/mtproto-api-updates"
           BASE_BRANCH="${{ github.event.repository.default_branch }}"
 
-          # Fetch the latest changes from remote
-          git fetch origin
-
-          # Checkout the existing branch based on default branch
+          # Create or reset branch based on default branch
           git checkout -B $BRANCH_NAME origin/$BASE_BRANCH
 
           # Add all changed and new files
@@ -159,7 +143,7 @@ jobs:
           
           git commit -m "Update MTProto API schema to Layer ${LAYER_VERSION}"
 
-          # Force push to update the branch
+          # Force push to create or update the branch
           git push --force --set-upstream origin $BRANCH_NAME
 
       - name: Create Pull Request
