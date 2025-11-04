@@ -45,7 +45,7 @@ jobs:
 
           if [ $EXIT_CODE -eq 0 ]; then
             echo "updates_detected=true" >> $GITHUB_OUTPUT
-            CURRENT_LAYER=$(grep -o "// LAYER [0-9]*" compiler/api/source/main_api.tl | awk '{print $3}')
+            CURRENT_LAYER=$(grep -oP "// LAYER \K\d+" compiler/api/source/main_api.tl || echo "Unknown")
             echo "layer_version=$CURRENT_LAYER" >> $GITHUB_OUTPUT
           elif [ $EXIT_CODE -eq 2 ]; then
             echo "updates_detected=false" >> $GITHUB_OUTPUT
@@ -69,7 +69,7 @@ jobs:
           BRANCH_NAME="update/mtproto-api-updates"
 
           # Check if there's an open PR for this branch
-          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --state open --json number -q '.[0].number')
+          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --state open --json number -q '.[0].number' || echo "")
 
           if [ -n "$PR_NUMBER" ]; then
             echo "existing_pr=true" >> $GITHUB_OUTPUT
@@ -96,12 +96,18 @@ jobs:
         if: steps.check-updates.outputs.updates_detected == 'true'
         run: |
           pip install .
-          python -m compiler.api.compiler
+          python -m compiler.api.compiler || {
+            echo "API compilation failed"
+            exit 1
+          }
 
       - name: Compile errors
         if: steps.check-updates.outputs.updates_detected == 'true'
         run: |
-          python -m compiler.errors.compiler
+          python -m compiler.errors.compiler || {
+            echo "Error compilation failed"
+            exit 1
+          }
 
       - name: Create branch and commit changes
         if: steps.check-updates.outputs.updates_detected == 'true' && steps.check-pr.outputs.existing_pr == 'false'
@@ -111,6 +117,13 @@ jobs:
 
           git checkout -b $BRANCH_NAME
           git add compiler/api/source/main_api.tl hydrogram/raw/ hydrogram/errors/ news/
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 1
+          fi
+          
           git commit -m "Update MTProto API schema to Layer ${LAYER_VERSION}"
           git push --set-upstream origin $BRANCH_NAME
 
@@ -120,15 +133,25 @@ jobs:
           LAYER_VERSION="${{ steps.check-updates.outputs.layer_version }}"
           BRANCH_NAME="update/mtproto-api-updates"
 
-          # Create a new branch based on the current main branch
-          git checkout -b $BRANCH_NAME-temp origin/main
+          # Fetch the latest changes from remote
+          git fetch origin
+
+          # Checkout the existing branch based on dev
+          git checkout -B $BRANCH_NAME origin/dev
 
           # Add the changes and commit
           git add compiler/api/source/main_api.tl hydrogram/raw/ hydrogram/errors/ news/
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 1
+          fi
+          
           git commit -m "Update MTProto API schema to Layer ${LAYER_VERSION}"
 
           # Force push to update the branch
-          git push --set-upstream --force origin $BRANCH_NAME-temp:$BRANCH_NAME
+          git push --force --set-upstream origin $BRANCH_NAME
 
       - name: Create Pull Request
         if: steps.check-updates.outputs.updates_detected == 'true' && steps.check-pr.outputs.existing_pr == 'false'
@@ -143,7 +166,7 @@ jobs:
           gh pr create \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
-            --base main \
+            --base dev \
             --head "$BRANCH_NAME" \
             --label "enhancement" \
             --label "automated"
