@@ -122,6 +122,7 @@ jobs:
 
           # Create a new branch based on the current main branch
           git checkout -b $BRANCH_NAME-temp origin/main
+          git pull
 
           # Add the changes and commit
           git add compiler/api/source/main_api.tl hydrogram/raw/ hydrogram/errors/ news/
