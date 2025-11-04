@@ -34,6 +34,9 @@ class Reaction(Object):
         custom_emoji_id (``int``, *optional*):
             Custom emoji id.
 
+        star (``bool``, *optional*):
+            Paid Telegram Star reaction.
+
         count (``int``, *optional*):
             Reaction count.
 
@@ -48,6 +51,7 @@ class Reaction(Object):
         client: hydrogram.Client = None,
         emoji: str | None = None,
         custom_emoji_id: int | None = None,
+        star: bool | None = None,
         count: int | None = None,
         chosen_order: int | None = None,
     ):
@@ -55,6 +59,7 @@ class Reaction(Object):
 
         self.emoji = emoji
         self.custom_emoji_id = custom_emoji_id
+        self.star = star
         self.count = count
         self.chosen_order = chosen_order
 
@@ -65,6 +70,9 @@ class Reaction(Object):
 
         if isinstance(reaction, raw.types.ReactionCustomEmoji):
             return Reaction(client=client, custom_emoji_id=reaction.document_id)
+
+        if isinstance(reaction, raw.types.ReactionPaid):
+            return Reaction(client=client, star=True)
         return None
 
     @staticmethod
