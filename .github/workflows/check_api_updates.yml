@@ -37,6 +37,9 @@ jobs:
       - name: Check for API schema updates
         id: check-updates
         run: |
+          # Allow the check script to exit with non-zero codes without failing the whole step
+          # (the script returns 0 when updates found, 2 when no updates, other codes indicate errors)
+          set +e
           FORCE_UPDATE=""
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.force_update }}" == "true" ]]; then
             FORCE_UPDATE="--force-update"
@@ -44,12 +47,15 @@ jobs:
 
           python dev_tools/check_api_schema_updates.py $FORCE_UPDATE
           EXIT_CODE=$?
+          # Re-enable "exit on error" for the remainder of the step
+          set -e
 
           if [ $EXIT_CODE -eq 0 ]; then
             echo "updates_detected=true" >> $GITHUB_OUTPUT
             CURRENT_LAYER=$(grep -oP "// LAYER \K\d+" compiler/api/source/main_api.tl || echo "Unknown")
             echo "layer_version=$CURRENT_LAYER" >> $GITHUB_OUTPUT
           elif [ $EXIT_CODE -eq 2 ]; then
+            # No updates detected — set output and continue (do NOT fail the job)
             echo "updates_detected=false" >> $GITHUB_OUTPUT
           else
             echo "Error checking for updates"
