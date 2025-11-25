@@ -288,7 +288,7 @@ class Chat(Object):
         if isinstance(channel, raw.types.ChannelForbidden):
             return Chat(
                 id=peer_id,
-                type=enums.ChatType.SUPERGROUP if channel.megagroup else enums.ChatType.CHANNEL,
+                type=enums.ChatType.SUPERGROUP if getattr(channel, 'megagroup', False) else enums.ChatType.CHANNEL,
                 title=channel.title,
                 client=client,
             )
